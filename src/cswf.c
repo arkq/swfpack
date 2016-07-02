@@ -114,12 +114,12 @@ static void *compress_zlib(const struct SWF_header *header, const void *buffer, 
 int main(int argc, char *argv[]) {
 
 	int opt;
-	const char *opts = "hcdz";
+	const char *opts = "hdcz";
 	struct option longopts[] = {
 		{ "help", no_argument, NULL, 'h' },
-		{ "compress", no_argument, NULL, 'c' },
 		{ "decompress", no_argument, NULL, 'd' },
-		{ "use-lzma", no_argument, NULL, 'z' },
+		{ "compress", no_argument, NULL, 'c' },
+		{ "zcompress", no_argument, NULL, 'z' },
 		{ 0, 0, 0, 0 },
 	};
 
@@ -136,13 +136,14 @@ return_usage:
 			printf("usage: %s [ -cdhz ] [ filename ]\n", argv[0]);
 			return EXIT_SUCCESS;
 
-		case 'c':
-			compress = 1;
-			break;
 		case 'd':
 			decompress = 1;
 			break;
+		case 'c':
+			compress = 1;
+			break;
 		case 'z':
+			compress = 1;
 			use_lzma = 1;
 			break;
 
