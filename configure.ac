@@ -16,5 +16,8 @@ AM_COND_IF([ENABLE_DEBUG], [
 	AC_DEFINE([DEBUG], [1], [Define to 1 if the debugging is enabled])
 ])
 
+PKG_CHECK_MODULES([LZMA], [liblzma])
+PKG_CHECK_MODULES([ZLIB], [zlib])
+
 AC_CONFIG_FILES([Makefile src/Makefile test/Makefile])
 AC_OUTPUT
