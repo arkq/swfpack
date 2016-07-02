@@ -41,7 +41,7 @@ struct __attribute__ ((packed)) SWF_header_ex {
 };
 
 
-void *decompress_lzma(const struct SWF_header *header, const void *buffer, size_t size) {
+static void *decompress_lzma(const struct SWF_header *header, const void *buffer, size_t size) {
 
 	const struct __attribute__ ((packed)) LZMA_SWF_header {
 		/* compressed SWF file length */
@@ -82,7 +82,11 @@ void *decompress_lzma(const struct SWF_header *header, const void *buffer, size_
 	return _buffer;
 }
 
-void *decompress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
+static void *compress_lzma(const struct SWF_header *header, const void *buffer, size_t size) {
+	return NULL;
+}
+
+static void *decompress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
 
 	z_stream strm = { 0 };
 	if (inflateInit(&strm) != Z_OK)
@@ -103,6 +107,10 @@ void *decompress_zlib(const struct SWF_header *header, const void *buffer, size_
 	return _buffer;
 }
 
+static void *compress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
+	return NULL;
+}
+
 int main(int argc, char *argv[]) {
 
 	int opt;
@@ -111,14 +119,14 @@ int main(int argc, char *argv[]) {
 		{ "help", no_argument, NULL, 'h' },
 		{ "compress", no_argument, NULL, 'c' },
 		{ "decompress", no_argument, NULL, 'd' },
-		{ "zlib", no_argument, NULL, 'z' },
+		{ "use-lzma", no_argument, NULL, 'z' },
 		{ 0, 0, 0, 0 },
 	};
 
 	int compress = 0;
 	int decompress = 0;
-	/* use zlib compression, otherwise lzma */
-	int use_zlib = 0;
+	/* use lzma compression, otherwise zlib */
+	int use_lzma = 0;
 
 	/* parse options */
 	while ((opt = getopt_long(argc, argv, opts, longopts, NULL)) != -1)
@@ -135,7 +143,7 @@ return_usage:
 			decompress = 1;
 			break;
 		case 'z':
-			use_zlib = 1;
+			use_lzma = 1;
 			break;
 
 		default:
@@ -206,23 +214,48 @@ return_usage:
 
 	}
 
-	f_swf = stdout;
-	if (is_atty && (compress || decompress)) {
-		if ((f_swf = fopen(argv[optind], "w")) == NULL) {
-			fprintf(stderr, "%s: cannot overwrite file: %s\n", argv[0], strerror(errno));
+	if (compress || decompress) {
+
+		f_swf = stdout;
+		header.signature[0] = SWF_SIGNATURE_F;
+
+		if (compress) {
+
+			unsigned char *tmp;
+
+			if (use_lzma) {
+				header.signature[0] = SWF_SIGNATURE_Z;
+				if (header.version < 13)
+					fprintf(stderr, "%s: warning: using LZMA compression for SWF version < 13\n", argv[0]);
+				tmp = compress_lzma(&header, buffer, size);
+			}
+			else {
+				header.signature[0] = SWF_SIGNATURE_C;
+				if (header.version < 6)
+					fprintf(stderr, "%s: warning: using ZLIB compression for SWF version < 6\n", argv[0]);
+				tmp = compress_zlib(&header, buffer, size);
+			}
+
+			if (tmp == NULL) {
+				fprintf(stderr, "%s: data compression failed\n", argv[0]);
+				return EXIT_FAILURE;
+			}
+
+			free(buffer);
+			buffer = tmp;
+
+		}
+
+		if (is_atty && (f_swf = fopen(argv[optind], "w")) == NULL) {
+			fprintf(stderr, "%s: unable to write file: %s\n", argv[0], strerror(errno));
 			return EXIT_FAILURE;
 		}
-	}
 
-	if (compress) {
-		header.signature[0] = use_zlib ? SWF_SIGNATURE_C : SWF_SIGNATURE_Z;
-
-	}
-	else if (decompress) {
-		header.signature[0] = SWF_SIGNATURE_F;
+		/* write converted (compressed or decompressed) SWF file */
 		fwrite(&header, sizeof(header), 1, f_swf);
 		fwrite(buffer, header.length - sizeof(header), 1, f_swf);
 		fclose(f_swf);
+
 	}
 	else {
 		/* dump information stored in the header */
