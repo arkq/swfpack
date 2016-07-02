@@ -83,7 +83,24 @@ void *decompress_lzma(const struct SWF_header *header, const void *buffer, size_
 }
 
 void *decompress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
-	return NULL;
+
+	z_stream strm = { 0 };
+	if (inflateInit(&strm) != Z_OK)
+		return NULL;
+
+	char *_buffer = malloc(header->length);
+	strm.next_out = (void *)_buffer;
+	strm.avail_out = header->length;
+
+	strm.next_in = (void *)buffer;
+	strm.avail_in = size;
+	if (inflate(&strm, Z_FINISH) != Z_STREAM_END) {
+		free(_buffer);
+		_buffer = NULL;
+	}
+
+	inflateEnd(&strm);
+	return _buffer;
 }
 
 int main(int argc, char *argv[]) {
