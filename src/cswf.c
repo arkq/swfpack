@@ -70,7 +70,7 @@ static void *decompress_lzma(const struct SWF_header *header, const void *buffer
 	if (lzma_code(&strm, LZMA_RUN) != LZMA_OK)
 		return NULL;
 
-	strm.next_in = buffer + sizeof(*src_header);
+	strm.next_in = (unsigned char *)buffer + sizeof(*src_header);
 	strm.avail_in = size - sizeof(*src_header);
 
 	/* FIXME: For some unknown reasons, lzma_code returns LZMA_DATA_ERROR
