@@ -1,4 +1,4 @@
-# cswf - Makefile.am
+# swfpack - Makefile.am
 # Copyright (c) 2016 Arkadiusz Bokowy
 
 SUBDIRS = src test

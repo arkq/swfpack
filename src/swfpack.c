@@ -1,5 +1,5 @@
 /*
- * cswf - cswf.c
+ * swfpack - swfpack.c
  * Copyright (c) 2016 Arkadiusz Bokowy
  *
  * This project is licensed under the terms of the MIT license.

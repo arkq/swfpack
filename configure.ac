@@ -1,7 +1,7 @@
-# cswf - configure.ac
+# swfpack - configure.ac
 # Copyright (c) 2016 Arkadiusz Bokowy
 
-AC_INIT([cswf], [0.1.0], [arkadiusz.bokowy@gmail.com])
+AC_INIT([swfpack], [0.1.0], [arkadiusz.bokowy@gmail.com])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
