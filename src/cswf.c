@@ -107,8 +107,31 @@ static void *decompress_zlib(const struct SWF_header *header, const void *buffer
 	return _buffer;
 }
 
-static void *compress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
-	return NULL;
+static void *compress_zlib(const struct SWF_header *header, const void *buffer, size_t *size) {
+	(void)header;
+
+	z_stream strm = { 0 };
+	if (deflateInit(&strm, 9) != Z_OK)
+		return NULL;
+
+	/* XXX: We are preforming compression, so the amount of data in the output
+	 *      stream *should* be less than in the input stream. However, such an
+	 *      assumption might be incorrect... */
+	char *_buffer = malloc(*size);
+	strm.next_out = (void *)_buffer;
+	strm.avail_out = *size;
+
+	strm.next_in = (void *)buffer;
+	strm.avail_in = *size;
+	if (deflate(&strm, Z_FINISH) != Z_STREAM_END) {
+		free(_buffer);
+		_buffer = NULL;
+	}
+
+	*size -= strm.avail_out;
+
+	deflateEnd(&strm);
+	return _buffer;
 }
 
 int main(int argc, char *argv[]) {
@@ -210,6 +233,10 @@ return_usage:
 			return EXIT_FAILURE;
 		}
 
+		/* calculate buffer size using the length of an uncompressed SWF file
+		 * stored in the SWF header */
+		size = header.length - sizeof(header);
+
 		free(buffer);
 		buffer = tmp;
 
@@ -234,7 +261,7 @@ return_usage:
 				header.signature[0] = SWF_SIGNATURE_C;
 				if (header.version < 6)
 					fprintf(stderr, "%s: warning: using ZLIB compression for SWF version < 6\n", argv[0]);
-				tmp = compress_zlib(&header, buffer, size);
+				tmp = compress_zlib(&header, buffer, &size);
 			}
 
 			if (tmp == NULL) {
@@ -254,7 +281,7 @@ return_usage:
 
 		/* write converted (compressed or decompressed) SWF file */
 		fwrite(&header, sizeof(header), 1, f_swf);
-		fwrite(buffer, header.length - sizeof(header), 1, f_swf);
+		fwrite(buffer, size, 1, f_swf);
 		fclose(f_swf);
 
 	}
