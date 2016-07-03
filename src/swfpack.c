@@ -40,29 +40,41 @@ struct __attribute__ ((packed)) SWF_header_ex {
 	uint16_t frame_count;
 };
 
+struct __attribute__ ((packed)) LZMA_header {
+	uint8_t properties[5];
+	uint64_t decompressed_length;
+};
 
+struct __attribute__ ((packed)) LZMA_SWF_header {
+	/* compressed data length without this header */
+	uint32_t length;
+	uint8_t properties[5];
+};
+
+
+/**
+ * Decompress SWF payload using LZMA algorithm.
+ *
+ * @param header Pointer to the SWF header structure.
+ * @param buffer Address from where the data payload is obtained.
+ * @param size The size of the SWF data payload buffer.
+ * @return The pointer to the buffer with decompressed data payload. Returned
+ *   pointer should be freed with the free() function. On error, this function
+ *   returns NULL. */
 static void *decompress_lzma(const struct SWF_header *header, const void *buffer, size_t size) {
 
-	const struct __attribute__ ((packed)) LZMA_SWF_header {
-		/* compressed SWF file length */
-		uint32_t length;
-		uint8_t properties[5];
-	} *src_header = buffer;
-
-	struct __attribute__ ((packed)) LZMA_7z_header {
-		uint8_t properties[5];
-		uint64_t decompressed_length;
-	} lzma_header;
+	const struct LZMA_SWF_header *swf_header = buffer;
+	struct LZMA_header lzma_header;
 
 	lzma_stream strm = LZMA_STREAM_INIT;
-	if (lzma_auto_decoder(&strm, UINT64_MAX, 0) != LZMA_OK)
+	if (lzma_alone_decoder(&strm, UINT64_MAX) != LZMA_OK)
 		return NULL;
 
 	char *_buffer = malloc(header->length);
 	strm.next_out = (void *)_buffer;
 	strm.avail_out = header->length;
 
-	memcpy(lzma_header.properties, src_header->properties, sizeof(lzma_header.properties));
+	memcpy(lzma_header.properties, swf_header->properties, sizeof(lzma_header.properties));
 	lzma_header.decompressed_length = header->length - sizeof(*header);
 
 	strm.next_in = (uint8_t *)&lzma_header;
@@ -70,8 +82,8 @@ static void *decompress_lzma(const struct SWF_header *header, const void *buffer
 	if (lzma_code(&strm, LZMA_RUN) != LZMA_OK)
 		return NULL;
 
-	strm.next_in = (unsigned char *)buffer + sizeof(*src_header);
-	strm.avail_in = size - sizeof(*src_header);
+	strm.next_in = (unsigned char *)buffer + sizeof(*swf_header);
+	strm.avail_in = size - sizeof(*swf_header);
 
 	/* FIXME: For some unknown reasons, lzma_code returns LZMA_DATA_ERROR
 	 *        even though decompressed data is *NOT* corrupted... */
@@ -82,10 +94,59 @@ static void *decompress_lzma(const struct SWF_header *header, const void *buffer
 	return _buffer;
 }
 
-static void *compress_lzma(const struct SWF_header *header, const void *buffer, size_t size) {
-	return NULL;
+/**
+ * Compress SWF payload using LZMA algorithm.
+ *
+ * @param header Pointer to the SWF header structure.
+ * @param buffer Address from where the data payload is obtained.
+ * @param size The address with the size of the SWF data payload buffer. Upon
+ *   successful compression, the size of the returned buffer will be stored in
+ *   this address.
+ * @return The pointer to the buffer with compressed data payload. Returned
+ *   pointer should be freed with the free() function. On error, this function
+ *   returns NULL and the value pointed by the *size is not modified. */
+static void *compress_lzma(const struct SWF_header *header, const void *buffer, size_t *size) {
+	(void)header;
+
+	lzma_stream strm = LZMA_STREAM_INIT;
+	lzma_options_lzma opt;
+
+	lzma_lzma_preset(&opt, LZMA_PRESET_EXTREME);
+	if (lzma_alone_encoder(&strm, &opt) != LZMA_OK)
+		return NULL;
+
+	/* XXX: We are preforming compression, so the amount of data in the output
+	 *      stream *should* be less than in the input stream. However, such an
+	 *      assumption might be incorrect... */
+	char *_buffer = malloc(*size);
+	strm.next_out = (void *)_buffer;
+	strm.avail_out = *size;
+
+	strm.next_in = (void *)buffer;
+	strm.avail_in = *size;
+	if (lzma_code(&strm, LZMA_FINISH) != LZMA_STREAM_END) {
+		lzma_end(&strm);
+		free(_buffer);
+		return NULL;
+	}
+
+	/* NOTE: Header size difference is a negative number! */
+	const size_t size_diff = sizeof(struct LZMA_SWF_header) - sizeof(struct LZMA_header);
+	const struct LZMA_header *lzma_header = (struct LZMA_header *)_buffer;
+	struct LZMA_SWF_header swf_header;
+
+	*size -= strm.avail_out - size_diff;
+
+	swf_header.length = *size - sizeof(swf_header);
+	memcpy(swf_header.properties, lzma_header->properties, sizeof(swf_header.properties));
+	memmove(_buffer, _buffer - size_diff, *size);
+	memcpy(_buffer, &swf_header, sizeof(swf_header));
+
+	lzma_end(&strm);
+	return _buffer;
 }
 
+/* Decompress SWF payload using DEFLATE algorithm. */
 static void *decompress_zlib(const struct SWF_header *header, const void *buffer, size_t size) {
 
 	z_stream strm = { 0 };
@@ -107,6 +168,7 @@ static void *decompress_zlib(const struct SWF_header *header, const void *buffer
 	return _buffer;
 }
 
+/* Compress SWF payload using DEFLATE algorithm. */
 static void *compress_zlib(const struct SWF_header *header, const void *buffer, size_t *size) {
 	(void)header;
 
@@ -115,8 +177,7 @@ static void *compress_zlib(const struct SWF_header *header, const void *buffer, 
 		return NULL;
 
 	/* XXX: We are preforming compression, so the amount of data in the output
-	 *      stream *should* be less than in the input stream. However, such an
-	 *      assumption might be incorrect... */
+	 *      stream *should* be less than in the input stream. */
 	char *_buffer = malloc(*size);
 	strm.next_out = (void *)_buffer;
 	strm.avail_out = *size;
@@ -255,7 +316,7 @@ return_usage:
 				header.signature[0] = SWF_SIGNATURE_Z;
 				if (header.version < 13)
 					fprintf(stderr, "%s: warning: using LZMA compression for SWF version < 13\n", argv[0]);
-				tmp = compress_lzma(&header, buffer, size);
+				tmp = compress_lzma(&header, buffer, &size);
 			}
 			else {
 				header.signature[0] = SWF_SIGNATURE_C;
