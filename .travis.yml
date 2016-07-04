@@ -1,0 +1,16 @@
+sudo: false
+dist: trusty
+
+language: c
+
+addons:
+  apt:
+    packages:
+      - liblzma-dev
+
+before_script:
+  - autoreconf --install && mkdir build && cd build
+
+script:
+  - ../configure && make && make check
+  - cat test/test-suite.log
