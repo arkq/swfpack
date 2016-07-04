@@ -217,7 +217,13 @@ int main(int argc, char *argv[]) {
 		switch (opt) {
 		case 'h':
 return_usage:
-			printf("usage: %s [ -cdhz ] [ filename ]\n", argv[0]);
+			printf("usage: %s [ -cdhz ] [ filename ]\n"
+					"\n"
+					"  -h, --help\t\tprint this help and exit\n"
+					"  -d, --decompress\tdecompress given SWF file\n"
+					"  -c, --compress\tcompress SWF file using DEFLATE algorithm\n"
+					"  -z, --zcompress\tcompress SWF file using LZMA algorithm\n",
+					argv[0]);
 			return EXIT_SUCCESS;
 
 		case 'd':
