@@ -1,11 +1,13 @@
 # swfpack - configure.ac
 # Copyright (c) 2016 Arkadiusz Bokowy
 
-AC_INIT([swfpack], [0.1.0], [arkadiusz.bokowy@gmail.com])
-AC_CONFIG_HEADERS([config.h])
+AC_INIT([swfpack], [1.0.0], [arkadiusz.bokowy@gmail.com])
 AM_INIT_AUTOMAKE([foreign -Wall -Werror])
 
+AC_CONFIG_HEADERS([config.h])
+
 AC_PROG_CC
+AC_PROG_INSTALL
 AM_PROG_CC_C_O
 
 # support for debugging
